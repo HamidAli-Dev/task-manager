@@ -40,7 +40,7 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleComplete }) => {
           </p>
         </div>
         <button
-          onClick={() => onToggleComplete(task.id)}
+          onClick={() => onToggleComplete(task._id || task.id)}
           className={`ml-4 p-1 rounded-full transition-colors ${
             task.status === "completed"
               ? "text-green-400 hover:text-green-300"
@@ -72,7 +72,7 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleComplete }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onDelete(task.id)}
+            onClick={() => onDelete(task._id || task.id)}
             className="p-2 text-red-400 hover:text-red-300"
           >
             <Trash2 className="h-4 w-4" />

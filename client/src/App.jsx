@@ -14,38 +14,43 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // useEffect(() => {
-  //   const savedUser = localStorage.getItem('taskflow_user');
-  //   if (savedUser) {
-  //     try {
-  //       const userData = JSON.parse(savedUser);
-  //       setUser(userData);
-  //     } catch (error) {
-  //       console.error('Error parsing saved user data:', error);
-  //       localStorage.removeItem('taskflow_user');
-  //     }
-  //   }
-  //   setLoading(false);
-  // }, []);
+  useEffect(() => {
+    const savedUser = localStorage.getItem("taskflow_user");
+    const token = localStorage.getItem("taskflow_token");
+    if (savedUser && token) {
+      try {
+        const userData = JSON.parse(savedUser);
+        setUser(userData);
+      } catch (error) {
+        console.error("Error parsing saved user data:", error);
+        localStorage.removeItem("taskflow_user");
+        localStorage.removeItem("taskflow_token");
+      }
+    }
+    setLoading(false);
+  }, []);
 
-  const handleLogin = (userData) => {
+  const handleLogin = (userData, token) => {
     console.log("User logged in:", userData);
-    // setUser(userData);
-    // localStorage.setItem('taskflow_user', JSON.stringify(userData));
+    setUser(userData);
+    localStorage.setItem("taskflow_user", JSON.stringify(userData));
+    localStorage.setItem("taskflow_token", token);
   };
 
-  const handleSignup = (userData) => {
+  const handleSignup = (userData, token) => {
     console.log("User signed up:", userData);
-    // setUser(userData);
-    // localStorage.setItem('taskflow_user', JSON.stringify(userData));
+    setUser(userData);
+    localStorage.setItem("taskflow_user", JSON.stringify(userData));
+    localStorage.setItem("taskflow_token", token);
   };
 
   const handleLogout = () => {
     console.log("User logged out");
     setUser(null);
-    // localStorage.removeItem('taskflow_user');
+    localStorage.removeItem("taskflow_user");
+    localStorage.removeItem("taskflow_token");
   };
 
   if (loading) {

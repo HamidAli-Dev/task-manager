@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { authAPI } from "../services/api";
 
 import AuthLayout from "../components/layout/AuthLayout";
 import Input from "../components/ui/Input";
@@ -39,21 +40,21 @@ const SignupPage = ({ onSignup }) => {
     console.log("Signup data:", data);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const mockUser = {
-        id: "1",
+      const response = await authAPI.signup({
         name: data.fullName,
         email: data.email,
-      };
+        password: data.password,
+      });
 
       setToast({ type: "success", message: "Account created successfully!" });
       setTimeout(() => {
-        onSignup(mockUser);
+        onSignup(response.data.user, response.data.token);
         navigate("/dashboard");
       }, 1000);
     } catch (error) {
-      setToast({ type: "error", message: "Signup failed. Please try again." });
+      const message =
+        error.response?.data?.message || "Signup failed. Please try again.";
+      setToast({ type: "error", message });
     } finally {
       setLoading(false);
     }

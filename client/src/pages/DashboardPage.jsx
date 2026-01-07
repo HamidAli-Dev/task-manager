@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { tasksAPI } from "../services/api";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Button from "../components/ui/Button";
 import TaskList from "../components/tasks/TaskList";
@@ -9,48 +10,39 @@ import Modal from "../components/ui/Modal";
 import Toast from "../components/ui/Toast";
 
 const DashboardPage = ({ user, onLogout }) => {
-  const [tasks, setTasks] = useState([
-    {
-      id: "1",
-      title: "Complete project proposal",
-      description:
-        "Write and submit the Q1 project proposal for the new client",
-      status: "in progress",
-      createdAt: "2024-01-15T10:00:00Z",
-    },
-    {
-      id: "2",
-      title: "Review code changes",
-      description: "Review pull requests from the development team",
-      status: "pending",
-      createdAt: "2024-01-14T14:30:00Z",
-    },
-    {
-      id: "3",
-      title: "Update documentation",
-      description: "Update API documentation with latest changes",
-      status: "completed",
-      createdAt: "2024-01-13T09:15:00Z",
-    },
-  ]);
-
+  const [tasks, setTasks] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [formLoading, setFormLoading] = useState(false);
   const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = async () => {
+    try {
+      const response = await tasksAPI.getTasks();
+      setTasks(response.data);
+    } catch (error) {
+      // setToast({ type: 'error', message: 'Failed to load tasks' });
+      console.log("tasks getting error", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredAndSortedTasks = useMemo(() => {
     let filtered = tasks;
 
-    // Filter by status
     if (statusFilter !== "all") {
       filtered = tasks.filter((task) => task.status === statusFilter);
     }
 
-    // Sort tasks
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "oldest":
@@ -59,7 +51,7 @@ const DashboardPage = ({ user, onLogout }) => {
           return a.title.localeCompare(b.title);
         case "status":
           return a.status.localeCompare(b.status);
-        default: // newest
+        default:
           return new Date(b.createdAt) - new Date(a.createdAt);
       }
     });
@@ -87,38 +79,31 @@ const DashboardPage = ({ user, onLogout }) => {
   };
 
   const handleTaskSubmit = async (taskData) => {
-    setLoading(true);
+    setFormLoading(true);
     console.log("Task submission:", taskData);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       if (editingTask) {
+        const response = await tasksAPI.updateTask(editingTask._id, taskData);
         setTasks((prev) =>
           prev.map((task) =>
-            task.id === editingTask.id ? { ...task, ...taskData } : task
+            task._id === editingTask._id ? response.data : task
           )
         );
         setToast({ type: "success", message: "Task updated successfully!" });
       } else {
-        const newTask = {
-          id: Date.now().toString(),
-          ...taskData,
-          createdAt: new Date().toISOString(),
-        };
-        setTasks((prev) => [newTask, ...prev]);
+        const response = await tasksAPI.createTask(taskData);
+        setTasks((prev) => [response.data, ...prev]);
         setToast({ type: "success", message: "Task created successfully!" });
       }
 
       setIsTaskModalOpen(false);
       setEditingTask(null);
     } catch (error) {
-      setToast({
-        type: "error",
-        message: "Failed to save task. Please try again.",
-      });
+      const message = error.response?.data?.message || "Failed to save task";
+      setToast({ type: "error", message });
     } finally {
-      setLoading(false);
+      setFormLoading(false);
     }
   };
 
@@ -126,15 +111,13 @@ const DashboardPage = ({ user, onLogout }) => {
     console.log("Deleting task:", taskId);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setTasks((prev) => prev.filter((task) => task.id !== taskId));
+      await tasksAPI.deleteTask(taskId);
+      setTasks((prev) => prev.filter((task) => task._id !== taskId));
       setToast({ type: "success", message: "Task deleted successfully!" });
       setDeleteTaskId(null);
     } catch (error) {
-      setToast({
-        type: "error",
-        message: "Failed to delete task. Please try again.",
-      });
+      const message = error.response?.data?.message || "Failed to delete task";
+      setToast({ type: "error", message });
     }
   };
 
@@ -142,25 +125,25 @@ const DashboardPage = ({ user, onLogout }) => {
     console.log("Toggling task completion:", taskId);
 
     try {
+      const task = tasks.find((t) => t._id === taskId);
+      const newStatus = task.status === "completed" ? "pending" : "completed";
+
+      const response = await tasksAPI.updateTask(taskId, {
+        ...task,
+        status: newStatus,
+      });
       setTasks((prev) =>
-        prev.map((task) =>
-          task.id === taskId
-            ? {
-                ...task,
-                status: task.status === "completed" ? "pending" : "completed",
-              }
-            : task
-        )
+        prev.map((t) => (t._id === taskId ? response.data : t))
       );
 
-      const task = tasks.find((t) => t.id === taskId);
-      const newStatus = task.status === "completed" ? "pending" : "completed";
       setToast({
         type: "success",
         message: `Task marked as ${newStatus}!`,
       });
     } catch (error) {
-      setToast({ type: "error", message: "Failed to update task status." });
+      const message =
+        error.response?.data?.message || "Failed to update task status";
+      setToast({ type: "error", message });
     }
   };
 
@@ -168,7 +151,6 @@ const DashboardPage = ({ user, onLogout }) => {
     <>
       <DashboardLayout user={user} onLogout={onLogout}>
         <div className="space-y-6">
-          {/* Header */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-slate-100 mb-2">
@@ -187,7 +169,6 @@ const DashboardPage = ({ user, onLogout }) => {
             </Button>
           </div>
 
-          {/* Filters */}
           <TaskFilter
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
@@ -196,18 +177,16 @@ const DashboardPage = ({ user, onLogout }) => {
             taskCounts={taskCounts}
           />
 
-          {/* Task List */}
           <TaskList
             tasks={filteredAndSortedTasks}
             onEdit={handleEditTask}
             onDelete={setDeleteTaskId}
             onToggleComplete={handleToggleComplete}
-            loading={false}
+            loading={loading}
           />
         </div>
       </DashboardLayout>
 
-      {/* Task Modal */}
       <TaskModal
         isOpen={isTaskModalOpen}
         onClose={() => {
@@ -216,10 +195,9 @@ const DashboardPage = ({ user, onLogout }) => {
         }}
         task={editingTask}
         onSubmit={handleTaskSubmit}
-        loading={loading}
+        loading={formLoading}
       />
 
-      {/* Delete Confirmation Modal */}
       <Modal
         isOpen={!!deleteTaskId}
         onClose={() => setDeleteTaskId(null)}
@@ -251,7 +229,6 @@ const DashboardPage = ({ user, onLogout }) => {
         </div>
       </Modal>
 
-      {/* Toast Notifications */}
       {toast && (
         <Toast
           message={toast.message}
