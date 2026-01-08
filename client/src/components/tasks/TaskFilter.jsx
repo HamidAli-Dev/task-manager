@@ -23,7 +23,7 @@ const TaskFilter = ({
     { value: "newest", label: "Newest First" },
     { value: "oldest", label: "Oldest First" },
     { value: "title", label: "Title A-Z" },
-    { value: "status", label: "By Status" },
+    // { value: "status", label: "By Status" },
   ];
 
   return (
@@ -60,17 +60,34 @@ const TaskFilter = ({
           <span className="text-sm font-medium text-slate-200">Sort by:</span>
         </div>
 
-        <select
-          value={sortBy}
-          onChange={(e) => onSortChange(e.target.value)}
-          className="px-3 py-1.5 rounded-lg bg-slate-700/50 border border-slate-600 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {sortOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={sortBy}
+            onChange={(e) => onSortChange(e.target.value)}
+            className="px-3 py-1.5 pr-8 rounded-lg bg-slate-700/50 border border-slate-600 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer [&>option]:bg-slate-800 [&>option]:text-slate-100 [&>option]:py-2 [&>option]:rounded-lg"
+          >
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+            <svg
+              className="h-3 w-3 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+        </div>
       </div>
     </div>
   );

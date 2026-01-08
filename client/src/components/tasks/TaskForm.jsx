@@ -63,14 +63,31 @@ const TaskForm = ({ task, onSubmit, onCancel, loading = false }) => {
         <label className="block text-sm font-medium text-slate-200">
           Status
         </label>
-        <select
-          className="w-full px-4 py-3 rounded-lg bg-slate-800/50 backdrop-blur-sm border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-          {...register("status")}
-        >
-          <option value="pending">Pending</option>
-          <option value="in progress">In Progress</option>
-          <option value="completed">Completed</option>
-        </select>
+        <div className="relative">
+          <select
+            className="w-full px-4 py-3 pr-10 rounded-lg bg-slate-800/50 backdrop-blur-sm border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer [&>option]:bg-slate-800 [&>option]:text-slate-100 [&>option]:py-2 [&>option]:rounded-lg"
+            {...register("status")}
+          >
+            <option value="pending">Pending</option>
+            <option value="in progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+          <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+            <svg
+              className="h-4 w-4 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-3 pt-4">

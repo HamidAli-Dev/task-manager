@@ -8,9 +8,11 @@ import TaskFilter from "../components/tasks/TaskFilter";
 import TaskModal from "../components/tasks/TaskModal";
 import Modal from "../components/ui/Modal";
 import Toast from "../components/ui/Toast";
+import Pagination from "../components/ui/Pagination";
 
 const DashboardPage = ({ user, onLogout }) => {
   const [tasks, setTasks] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -18,6 +20,8 @@ const DashboardPage = ({ user, onLogout }) => {
   const [deleteTaskId, setDeleteTaskId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(6);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -39,8 +43,15 @@ const DashboardPage = ({ user, onLogout }) => {
   const filteredAndSortedTasks = useMemo(() => {
     let filtered = tasks;
 
+    // Filter by search query
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((task) =>
+        task.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
     if (statusFilter !== "all") {
-      filtered = tasks.filter((task) => task.status === statusFilter);
+      filtered = filtered.filter((task) => task.status === statusFilter);
     }
 
     const sorted = [...filtered].sort((a, b) => {
@@ -49,15 +60,27 @@ const DashboardPage = ({ user, onLogout }) => {
           return new Date(a.createdAt) - new Date(b.createdAt);
         case "title":
           return a.title.localeCompare(b.title);
-        case "status":
-          return a.status.localeCompare(b.status);
         default:
           return new Date(b.createdAt) - new Date(a.createdAt);
       }
     });
 
     return sorted;
-  }, [tasks, statusFilter, sortBy]);
+  }, [tasks, statusFilter, sortBy, searchQuery]);
+
+  // Pagination
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAndSortedTasks.slice(startIndex, endIndex);
+  }, [filteredAndSortedTasks, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredAndSortedTasks.length / itemsPerPage);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, sortBy, searchQuery]);
 
   const taskCounts = useMemo(() => {
     return {
@@ -149,7 +172,12 @@ const DashboardPage = ({ user, onLogout }) => {
 
   return (
     <>
-      <DashboardLayout user={user} onLogout={onLogout}>
+      <DashboardLayout
+        user={user}
+        onLogout={onLogout}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      >
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div>
@@ -178,11 +206,19 @@ const DashboardPage = ({ user, onLogout }) => {
           />
 
           <TaskList
-            tasks={filteredAndSortedTasks}
+            tasks={paginatedTasks}
             onEdit={handleEditTask}
             onDelete={setDeleteTaskId}
             onToggleComplete={handleToggleComplete}
             loading={loading}
+          />
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredAndSortedTasks.length}
+            itemsPerPage={itemsPerPage}
           />
         </div>
       </DashboardLayout>
