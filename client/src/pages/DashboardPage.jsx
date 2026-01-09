@@ -1,14 +1,20 @@
 import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { tasksAPI } from "../services/api";
+
+import { tasksAPI, communityAPI } from "../services/api";
+import socketService from "../services/socket";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import TabsLayout from "../components/layout/TabsLayout";
 import Button from "../components/ui/Button";
 import TaskList from "../components/tasks/TaskList";
 import TaskFilter from "../components/tasks/TaskFilter";
 import TaskModal from "../components/tasks/TaskModal";
 import Modal from "../components/ui/Modal";
 import Toast from "../components/ui/Toast";
+import RealtimeToast from "../components/ui/RealtimeToast";
 import Pagination from "../components/ui/Pagination";
+import CommunityBoard from "../components/community/CommunityBoard";
+import ActiveUsersPanel from "../components/community/ActiveUsersPanel";
 
 const DashboardPage = ({ user, onLogout }) => {
   const [tasks, setTasks] = useState([]);
@@ -18,32 +24,146 @@ const DashboardPage = ({ user, onLogout }) => {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [formLoading, setFormLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(6);
+  const [loading, setLoading] = useState(true);
+  const [formLoading, setFormLoading] = useState(false);
+  const [currentTab, setCurrentTab] = useState(0);
+
+  // Community state
+  const [communityTasks, setCommunityTasks] = useState([]);
+
+  const [activeUsers, setActiveUsers] = useState([]);
+  const [editingTasks, setEditingTasks] = useState({});
+  const [realtimeToasts, setRealtimeToasts] = useState([]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     fetchTasks();
+    initializeSocket();
+
+    return () => {
+      socketService.removeAllListeners();
+      socketService.disconnect();
+    };
   }, []);
+
+  useEffect(() => {
+    if (currentTab === 1) {
+      fetchCommunityTasks();
+      socketService.joinCommunity();
+      socketService.requestPresence();
+    } else {
+      socketService.leaveCommunity();
+    }
+  }, [currentTab]);
+
+  const initializeSocket = () => {
+    const token = localStorage.getItem("taskflow_token");
+    if (token) {
+      socketService.connect(token);
+      setupSocketListeners();
+    }
+  };
+
+  const setupSocketListeners = () => {
+    socketService.onUserJoined((data) => {
+      addRealtimeToast({
+        message: `${data.user.name} joined the board`,
+        type: "info",
+        user: data.user,
+        action: "joined",
+      });
+    });
+
+    socketService.onUserLeft((data) => {
+      addRealtimeToast({
+        message: `${data.user.name} left the board`,
+        type: "info",
+        user: data.user,
+        action: "left",
+      });
+    });
+
+    socketService.onTaskCreate((data) => {
+      setCommunityTasks((prev) => [data.task, ...prev]);
+      if (data.user.id !== user?.id) {
+        addRealtimeToast({
+          message: `${data.user.name} added a new task`,
+          type: "success",
+          user: data.user,
+          action: "added",
+        });
+      }
+    });
+
+    socketService.onTaskUpdate((data) => {
+      setCommunityTasks((prev) =>
+        prev.map((task) => (task._id === data.task._id ? data.task : task))
+      );
+      if (data.user.id !== user?.id) {
+        addRealtimeToast({
+          message: `${data.user.name} updated a task`,
+          type: "success",
+          user: data.user,
+          action: "updated",
+        });
+      }
+    });
+
+    socketService.onTaskDelete((data) => {
+      setCommunityTasks((prev) =>
+        prev.filter((task) => task._id !== data.taskId)
+      );
+      if (data.user.id !== user?.id) {
+        addRealtimeToast({
+          message: `${data.user.name} deleted a task`,
+          type: "success",
+          user: data.user,
+          action: "deleted",
+        });
+      }
+    });
+
+    socketService.onPresenceUpdate((data) => {
+      setActiveUsers(data.activeUsers);
+    });
+
+    socketService.onTaskEditing((data) => {
+      setEditingTasks((prev) => ({
+        ...prev,
+        [data.taskId]: {
+          isEditing: data.isEditing,
+          user: data.user,
+        },
+      }));
+    });
+  };
 
   const fetchTasks = async () => {
     try {
       const response = await tasksAPI.getTasks();
       setTasks(response.data);
     } catch (error) {
-      // setToast({ type: 'error', message: 'Failed to load tasks' });
       console.log("tasks getting error", error);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchCommunityTasks = async () => {
+    try {
+      const response = await communityAPI.getTasks();
+      setCommunityTasks(response.data);
+    } catch (error) {
+      console.log("community tasks getting error", error);
+      setToast({ type: "error", message: "Failed to load community tasks" });
+    }
+  };
+
   const filteredAndSortedTasks = useMemo(() => {
     let filtered = tasks;
 
-    // Filter by search query
     if (searchQuery.trim()) {
       filtered = filtered.filter((task) =>
         task.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -68,7 +188,6 @@ const DashboardPage = ({ user, onLogout }) => {
     return sorted;
   }, [tasks, statusFilter, sortBy, searchQuery]);
 
-  // Pagination
   const paginatedTasks = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -76,11 +195,6 @@ const DashboardPage = ({ user, onLogout }) => {
   }, [filteredAndSortedTasks, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(filteredAndSortedTasks.length / itemsPerPage);
-
-  // Reset to first page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter, sortBy, searchQuery]);
 
   const taskCounts = useMemo(() => {
     return {
@@ -91,6 +205,19 @@ const DashboardPage = ({ user, onLogout }) => {
     };
   }, [tasks]);
 
+  const addRealtimeToast = (toast) => {
+    const id = Date.now();
+    setRealtimeToasts((prev) => [...prev, { ...toast, id }]);
+  };
+
+  const removeRealtimeToast = (id) => {
+    setRealtimeToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, sortBy, searchQuery]);
+
   const handleCreateTask = () => {
     setEditingTask(null);
     setIsTaskModalOpen(true);
@@ -99,11 +226,15 @@ const DashboardPage = ({ user, onLogout }) => {
   const handleEditTask = (task) => {
     setEditingTask(task);
     setIsTaskModalOpen(true);
+
+    // Notify others about editing
+    if (task.creator) {
+      socketService.setEditing(task._id, true);
+    }
   };
 
   const handleTaskSubmit = async (taskData) => {
     setFormLoading(true);
-    console.log("Task submission:", taskData);
 
     try {
       if (editingTask) {
@@ -130,9 +261,39 @@ const DashboardPage = ({ user, onLogout }) => {
     }
   };
 
-  const handleDeleteTask = async (taskId) => {
-    console.log("Deleting task:", taskId);
+  const handleCommunityTaskSubmit = async (taskData) => {
+    setFormLoading(true);
+    console.log("Creating community task:", taskData);
 
+    try {
+      if (editingTask) {
+        const response = await communityAPI.updateTask(
+          editingTask._id,
+          taskData
+        );
+        console.log("Updated community task:", response.data);
+        socketService.setEditing(editingTask._id, false);
+      } else {
+        const response = await communityAPI.createTask(taskData);
+        console.log("Created community task:", response.data);
+      }
+
+      setIsTaskModalOpen(false);
+      setEditingTask(null);
+      setToast({
+        type: "success",
+        message: "Community task saved successfully!",
+      });
+    } catch (error) {
+      console.error("Community task submit error:", error);
+      const message = error.response?.data?.message || "Failed to save task";
+      setToast({ type: "error", message });
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
     try {
       await tasksAPI.deleteTask(taskId);
       setTasks((prev) => prev.filter((task) => task._id !== taskId));
@@ -144,9 +305,17 @@ const DashboardPage = ({ user, onLogout }) => {
     }
   };
 
-  const handleToggleComplete = async (taskId) => {
-    console.log("Toggling task completion:", taskId);
+  const handleCommunityTaskDelete = async (taskId) => {
+    try {
+      await communityAPI.deleteTask(taskId);
+      setDeleteTaskId(null);
+    } catch (error) {
+      const message = error.response?.data?.message || "Failed to delete task";
+      setToast({ type: "error", message });
+    }
+  };
 
+  const handleToggleComplete = async (taskId) => {
     try {
       const task = tasks.find((t) => t._id === taskId);
       const newStatus = task.status === "completed" ? "pending" : "completed";
@@ -170,23 +339,34 @@ const DashboardPage = ({ user, onLogout }) => {
     }
   };
 
-  return (
-    <>
-      <DashboardLayout
-        user={user}
-        onLogout={onLogout}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-      >
+  const handleCommunityToggleComplete = async (taskId) => {
+    try {
+      const task = communityTasks.find((t) => t._id === taskId);
+      const newStatus = task.status === "completed" ? "pending" : "completed";
+
+      await communityAPI.updateTask(taskId, { ...task, status: newStatus });
+    } catch (error) {
+      const message =
+        error.response?.data?.message || "Failed to update task status";
+      setToast({ type: "error", message });
+    }
+  };
+
+  const tabs = [
+    { id: "my-tasks", label: "My Tasks" },
+    { id: "community", label: "Community Tasks" },
+  ];
+
+  const renderTabContent = (activeTab) => {
+    if (activeTab === 0) {
+      return (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-slate-100 mb-2">
-                Task Dashboard
+                My Tasks
               </h1>
-              <p className="text-slate-400">
-                Manage your tasks and stay organized
-              </p>
+              <p className="text-slate-400">Manage your personal tasks</p>
             </div>
             <Button
               onClick={handleCreateTask}
@@ -221,16 +401,63 @@ const DashboardPage = ({ user, onLogout }) => {
             itemsPerPage={itemsPerPage}
           />
         </div>
+      );
+    } else {
+      return (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3">
+            <CommunityBoard
+              tasks={communityTasks}
+              currentUser={user}
+              onCreateTask={() => {
+                setEditingTask(null);
+                setIsTaskModalOpen(true);
+              }}
+              onEditTask={handleEditTask}
+              onDeleteTask={setDeleteTaskId}
+              onToggleComplete={handleCommunityToggleComplete}
+              editingTasks={editingTasks}
+              loading={false}
+            />
+          </div>
+          <div className="lg:col-span-1">
+            <ActiveUsersPanel users={activeUsers} currentUser={user} />
+          </div>
+        </div>
+      );
+    }
+  };
+
+  return (
+    <>
+      <DashboardLayout
+        user={user}
+        onLogout={onLogout}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      >
+        <TabsLayout
+          tabs={tabs}
+          defaultTab={currentTab}
+          onTabChange={setCurrentTab}
+        >
+          {renderTabContent}
+        </TabsLayout>
       </DashboardLayout>
 
       <TaskModal
         isOpen={isTaskModalOpen}
         onClose={() => {
           setIsTaskModalOpen(false);
+          if (editingTask?.creator) {
+            socketService.setEditing(editingTask._id, false);
+          }
           setEditingTask(null);
         }}
         task={editingTask}
-        onSubmit={handleTaskSubmit}
+        onSubmit={
+          currentTab === 1 ? handleCommunityTaskSubmit : handleTaskSubmit
+        }
         loading={formLoading}
       />
 
@@ -248,7 +475,13 @@ const DashboardPage = ({ user, onLogout }) => {
           <div className="flex gap-3">
             <Button
               variant="danger"
-              onClick={() => handleDeleteTask(deleteTaskId)}
+              onClick={() => {
+                if (communityTasks.find((t) => t._id === deleteTaskId)) {
+                  handleCommunityTaskDelete(deleteTaskId);
+                } else {
+                  handleDeleteTask(deleteTaskId);
+                }
+              }}
               className="flex-1 flex items-center justify-center gap-2"
             >
               <Trash2 className="h-4 w-4" />
@@ -264,6 +497,17 @@ const DashboardPage = ({ user, onLogout }) => {
           </div>
         </div>
       </Modal>
+
+      {realtimeToasts.map((toast) => (
+        <RealtimeToast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          user={toast.user}
+          action={toast.action}
+          onClose={() => removeRealtimeToast(toast.id)}
+        />
+      ))}
 
       {toast && (
         <Toast

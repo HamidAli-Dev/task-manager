@@ -4,4 +4,5 @@
 // export { default as Badge } from "./Badge";
 // export { default as Loader } from "./Loader";
 // export { default as Toast } from "./Toast";
-// export { default as Pagination } from "./Pagination";
+// export { default as Avatar } from "./Avatar";
+// export { default as RealtimeToast } from "./RealtimeToast";
