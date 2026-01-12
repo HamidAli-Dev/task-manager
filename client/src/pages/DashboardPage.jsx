@@ -25,6 +25,7 @@ const DashboardPage = ({ user, onLogout }) => {
   const [editingTask, setEditingTask] = useState(null);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [communityCurrentPage, setCommunityCurrentPage] = useState(1);
   const [itemsPerPage] = useState(6);
   const [loading, setLoading] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
@@ -194,7 +195,14 @@ const DashboardPage = ({ user, onLogout }) => {
     return filteredAndSortedTasks.slice(startIndex, endIndex);
   }, [filteredAndSortedTasks, currentPage, itemsPerPage]);
 
+  const paginatedCommunityTasks = useMemo(() => {
+    const startIndex = (communityCurrentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return communityTasks.slice(startIndex, endIndex);
+  }, [communityTasks, communityCurrentPage, itemsPerPage]);
+
   const totalPages = Math.ceil(filteredAndSortedTasks.length / itemsPerPage);
+  const communityTotalPages = Math.ceil(communityTasks.length / itemsPerPage);
 
   const taskCounts = useMemo(() => {
     return {
@@ -216,7 +224,11 @@ const DashboardPage = ({ user, onLogout }) => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, sortBy, searchQuery]);
+  }, [statusFilter, sortBy, searchQuery, currentTab]);
+
+  useEffect(() => {
+    setCommunityCurrentPage(1);
+  }, [currentTab]);
 
   const handleCreateTask = () => {
     setEditingTask(null);
@@ -405,9 +417,9 @@ const DashboardPage = ({ user, onLogout }) => {
     } else {
       return (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 space-y-6">
             <CommunityBoard
-              tasks={communityTasks}
+              tasks={paginatedCommunityTasks}
               currentUser={user}
               onCreateTask={() => {
                 setEditingTask(null);
@@ -418,6 +430,13 @@ const DashboardPage = ({ user, onLogout }) => {
               onToggleComplete={handleCommunityToggleComplete}
               editingTasks={editingTasks}
               loading={false}
+            />
+            <Pagination
+              currentPage={communityCurrentPage}
+              totalPages={communityTotalPages}
+              onPageChange={setCommunityCurrentPage}
+              totalItems={communityTasks.length}
+              itemsPerPage={itemsPerPage}
             />
           </div>
           <div className="lg:col-span-1">
